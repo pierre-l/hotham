@@ -14,8 +14,9 @@ use ash::{
     vk::{self, DebugUtilsObjectNameInfoEXT, Handle, ObjectType},
     Device, Entry, Instance as AshInstance,
 };
+use image::EncodableLayout;
 use openxr as xr;
-use std::{cmp::max, ffi::CString, fmt::Debug, ptr::copy};
+use std::{ffi::CString, fmt::Debug, ptr::copy};
 
 type XrVulkan = xr::Vulkan;
 
@@ -210,7 +211,10 @@ impl VulkanContext {
     pub(crate) fn testing() -> Result<Self> {
         let (instance, entry) = vulkan_init_test()?;
         let physical_device = get_test_physical_device(&instance);
-        let extension_names = Vec::new();
+        let mut extension_names = Vec::new();
+        unsafe {
+            add_additional_extensions(&mut extension_names, &instance, physical_device);
+        }
         let (device, graphics_queue, queue_family_index) =
             create_vulkan_device(&extension_names, &instance, physical_device)?;
 
@@ -387,12 +391,13 @@ impl VulkanContext {
     }
 
     pub fn get_alignment<T: Sized>(&self) -> vk::DeviceSize {
-        max(
-            self.physical_device_properties
-                .limits
-                .min_uniform_buffer_offset_alignment,
-            std::mem::align_of::<T>() as vk::DeviceSize,
-        )
+        // max(
+        //     self.physical_device_properties
+        //         .limits
+        //         .min_uniform_buffer_offset_alignment,
+        //     std::mem::align_of::<T>() as vk::DeviceSize,
+        // )
+        std::mem::align_of::<T>() as vk::DeviceSize
     }
 
     pub fn find_memory_type(
@@ -1151,8 +1156,25 @@ pub fn create_vulkan_device_legacy(
             .split(' ')
             .map(|x| CString::new(x).unwrap())
             .collect::<Vec<_>>();
-        extension_names.push(CString::from_vec_unchecked(b"VK_KHR_multiview".to_vec()));
+        add_additional_extensions(&mut extension_names, vulkan_instance, physical_device);
+
         create_vulkan_device(&extension_names, vulkan_instance, physical_device)
+    }
+}
+
+unsafe fn add_additional_extensions(
+    extension_names: &mut Vec<CString>,
+    vulkan_instance: &AshInstance,
+    physical_device: vk::PhysicalDevice,
+) {
+    extension_names.push(CString::from_vec_unchecked(b"VK_KHR_multiview".to_vec()));
+    let extension_properties = vulkan_instance
+        .enumerate_device_extension_properties(physical_device)
+        .expect("Unable to enumerate device extensions");
+    if has_portability_subset(extension_properties) {
+        extension_names.push(CString::from_vec_unchecked(
+            b"VK_KHR_portability_subset".to_vec(),
+        ));
     }
 }
 
@@ -1275,3 +1297,19 @@ pub const EMPTY_KTX: [u8; 104] = [
     0x6F, 0x6E, 0x00, 0x53, 0x3D, 0x72, 0x2C, 0x54, 0x3D, 0x64, 0x2C, 0x52, 0x3D, 0x69, 0x00, 0x00,
     0x04, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
 ];
+
+fn has_portability_subset(extension_properties: Vec<vk::ExtensionProperties>) -> bool {
+    let portability = b"VK_KHR_portability_subset".as_bytes();
+    let portability = unsafe { &*(portability as *const _ as *const [i8]) };
+    let len = portability.len();
+    for property in extension_properties {
+        if property
+            .extension_name
+            .windows(len)
+            .any(move |s| s == (portability))
+        {
+            return true;
+        }
+    }
+    return false;
+}
