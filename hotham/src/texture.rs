@@ -5,7 +5,6 @@ use image::io::Reader as ImageReader;
 use libktx_rs::{sources::StreamSource, RustKtxStream, TextureCreateFlags, TextureSource};
 use std::{
     io::Cursor,
-    path::PathBuf,
     sync::{Arc, Mutex},
 };
 
@@ -139,7 +138,7 @@ impl Texture {
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "android"))]
 fn parse_image(path: &str) -> Result<(Vec<u8>, u32, u32)> {
     let path = format!(r#"..\test_assets\\{}"#, path);
     let img = ImageReader::open(path)?.decode()?;
@@ -162,23 +161,6 @@ fn parse_image(path: &str) -> Result<(Vec<u8>, u32, u32)> {
     let width = img.width();
     let height = img.height();
     return Ok((img.into_raw(), width, height));
-}
-
-#[cfg(target_os = "windows")]
-fn _get_ktx_file(file_name: &PathBuf) -> Result<Box<std::fs::File>> {
-    use anyhow::Context;
-    use std::{fs::OpenOptions, path::Path};
-    let file_name = file_name
-        .to_str()
-        .ok_or(anyhow!("Unable to convert {:?} to string", file_name))?;
-    let path = format!(r#"..\test_assets\\{}"#, file_name);
-    let path = Path::new(&path);
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(&path)
-        .context(format!("{:?}", path))?;
-    Ok(Box::new(file))
 }
 
 pub fn parse_ktx(
@@ -227,18 +209,6 @@ pub fn parse_ktx(
         mip_count,
         offsets,
     ))
-}
-
-#[cfg(target_os = "android")]
-fn _get_ktx_file(path: &PathBuf) -> Result<Box<Cursor<Vec<u8>>>> {
-    use crate::util::get_asset_from_path;
-    let path = path
-        .to_str()
-        .ok_or(anyhow!("Unable to convert {:?} to string", path))?;
-    let asset = get_asset_from_path(path)?;
-
-    // delicious
-    Ok(Box::new(Cursor::new(asset)))
 }
 
 fn add_alpha_channel(image: &gltf::image::Data) -> Vec<u8> {

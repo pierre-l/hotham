@@ -214,17 +214,6 @@ impl XrContext {
     }
 }
 
-#[cfg(target_os = "windows")]
-pub(crate) fn create_vulkan_context(
-    xr_instance: &xr::Instance,
-    system: xr::SystemId,
-) -> Result<VulkanContext, crate::hotham_error::HothamError> {
-    let vulkan_context = VulkanContext::create_from_xr_instance_legacy(xr_instance, system)?;
-    println!("[HOTHAM_VULKAN] - Vulkan Context created successfully");
-    Ok(vulkan_context)
-}
-
-#[cfg(target_os = "android")]
 fn create_vulkan_context(
     xr_instance: &xr::Instance,
     system: xr::SystemId,
